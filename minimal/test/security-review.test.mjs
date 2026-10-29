@@ -20,7 +20,8 @@ async function fixture(t) {
   await fs.writeFile(path.join(staticDir, 'index.html'), '<!doctype html><p>Synthetic static app</p>');
   await fs.writeFile(path.join(base, 'outside.html'), 'SYNTHETIC_PRIVATE_OUTSIDE');
   await fs.symlink(path.join(base, 'outside.html'), path.join(staticDir, 'escape.html'));
-  const app = await createApplication({ dataDir: path.join(base, 'state'), roots: [root], port: 0, staticDir });
+  const executable = fileURLToPath(new URL('./fake-codex.mjs', import.meta.url));
+  const app = await createApplication({ dataDir: path.join(base, 'state'), roots: [root], executable, port: 0, staticDir });
   t.after(async () => { await app.close(); await fs.rm(base, { recursive: true, force: true }); });
   return { app, base, root, staticDir };
 }
