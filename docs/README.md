@@ -1,68 +1,31 @@
-# T3 Code docs
+# Documentation
 
-## Using T3 Code
+## Use the application
 
-- [Install T3 Code](./user/install.md)
-- [Messages and context](./user/composer.md)
-- [Working with threads](./user/thread-sidebar.md)
-- [Permission modes](./user/permission-modes.md)
-- [Terminal history](./user/terminal.md)
-- [Source control](./user/source-control.md)
-- [Project settings](./user/project-settings.md)
-- [Appearance and themes](./user/appearance.md)
-- [Keyboard shortcuts](./user/keybindings.md)
-- [SnapShots](./user/snap-shot.md)
-- [Visual replies](./user/html-renders.md)
-- [Import browser sessions](./user/browser-import.md)
-- [Use T3 Code as your default browser](./user/default-browser.md)
-- [Devices](./user/devices.md)
-- [Usage and limits](./user/usage.md)
-- [Product usage data](./user/telemetry.md)
-- [Remote access](./user/remote-access.md)
-- [Guest links](./user/guest-links.md)
-- [T3 Connect troubleshooting](./user/t3-connect-troubleshooting.md)
-- [Outside agents (MCP)](./user/outside-agents.md)
-- [Running in the background](./user/background-service.md)
-- [Updating T3 Code](./user/updating.md)
-- [Triage an issue](./user/triage.md)
-- Provider guides: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md) · [OpenCode](./user/providers-opencode.md) · [Antigravity](./user/providers-antigravity.md) · [Pi](./user/providers-pi.md) · [Muse Code](./user/providers-muse.md) · [fx](./user/providers-fx.md)
+- [Getting started](GETTING-STARTED.md): Docker/Compose setup, native Node setup, roots and private browser access.
+- [Operations](OPERATIONS.md): start, stop, logs, health, state, backup and troubleshooting.
+- [Deployment smoke test](DEPLOYMENT-SMOKE.md): a bounded check for a selected host, CLI and browser session.
 
----
+## Develop and maintain
 
-## Working on T3 Code
+- [Development](DEVELOPMENT.md): repository structure, focused checks, synthetic test adapters and release packaging.
+- [Contributing](../CONTRIBUTING.md): small changes and verification expectations.
+- [Maintenance](MAINTENANCE.md): reviewing upstream updates without reintroducing removed services.
+- [Removed implementation inventory](REMOVALS.md): what was removed and what replaces it.
 
-Start with the [development runbook](./operations/development.md) and
-[contribution policy](../CONTRIBUTING.md).
+## Security and evidence
 
-Internal notes preserve architectural decisions, constraints, and implementation traps that the
-source alone does not explain. Most code changes do not need an internal documentation update. Follow the
-[documentation rules](../AGENTS.md#documentation) before adding one.
+- [Data and security boundary](SECURITY.md): authentication, roots, local data, Codex ownership and egress limits.
+- [Security reporting](../SECURITY.md): handling a suspected vulnerability privately.
+- [Verification evidence](VERIFICATION.md): observed results, tested scope and remaining limits.
+- [Network summary](verification/network-summary.json): bounded runtime observations and tested hashes.
+- [Packaging summary](verification/packaging-summary.json): extracted-release lifecycle, browser, host CLI transport and container checks.
+- [Final security summary](verification/security-summary.json): source/asset review, corrected browser-launch disclosure and remaining external verification limits.
+- [Runtime audit tooling](../minimal/audit/README.md): reproducing the synthetic process/network audit.
 
-- [Architecture overview](./internals/overview.md)
-- [Glossary](./internals/glossary.md)
-- [Connection runtime](./internals/connection-runtime.md)
-- [Providers](./internals/providers.md)
-- [Adding a provider](./internals/adding-a-provider.md)
-- [Pull request file revisions](./internals/pull-request-file-revisions.md)
-- [Model classification](./internals/model-manifest.md)
-- [Remote environments](./internals/remote.md)
-- [Server updates](./internals/server-updates.md)
-- [Resource telemetry](./internals/resource-telemetry.md)
-- [Product analytics](./internals/product-analytics.md)
-- [Environment auth](./internals/environment-auth.md)
-- [T3 Connect](./internals/t3-connect.md)
-- [Assistant citations](./internals/assistant-citations.md)
-- [Mobile navigation](./internals/mobile-navigation.md)
-- [Mobile development lifecycle](./internals/mobile-development.md)
-- [Terminal runtime](./internals/terminal-runtime.md)
-- [Devices](./internals/devices.md)
-- [Voice input](./internals/voice-input.md)
+## Provenance and deployment notes
 
-### Runbooks
-
-- [Development and local builds](./operations/development.md)
-- [T3 Connect setup](./operations/connect-setup.md)
-- [Release](./operations/release.md)
-- [Observability](./operations/observability.md)
-- [Relay observability](./operations/relay-observability.md)
-- [Mobile app store screenshots](./operations/mobile-app-store-screenshots.md)
+- [Retained T3 UI source](../minimal/web/UPSTREAM.md) and [upstream pin](feasibility/UPSTREAM.json).
+- [Runtime compatibility](feasibility/linux.md) for native and Docker workflows.
+- [Deployment and integration notes](feasibility/README.md): public implementation constraints and integration boundaries.
+- [Original license](../LICENSE).

@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-29",
+  "version": "0.1.1",
+  "scope": "Current repository source plus generated assets, release and isolated synthetic runtime checks",
+  "sourceAudit": {
+    "originalCurrentFiles": 96,
+    "independentBaseline": true,
+    "independentArchitecture": true,
+    "focusedTransportReview": true,
+    "telemetryOrUnapprovedExternalClientFound": false,
+    "embeddedCredentialFound": false
+  },
+  "finding": {
+    "rule": "CWE-214",
+    "title": "Browser opener exposed bearer capability in process arguments",
+    "status": "fixed in 0.1.1",
+    "paths": [
+      "minimal/server/main.mjs",
+      "minimal/server/launch.mjs",
+      "scripts/manage.py"
+    ],
+    "fix": "OS opener receives only private launch.html file URI; secret stays in owner-only static local handoff; no unauthenticated token endpoint added",
+    "validation": [
+      "Native argv regression",
+      "Python argv/private file/cleanup regressions",
+      "Real native and packaged browser file-to-loopback authentication",
+      "Independent post-fix source review",
+      "Linux cross-UID check: no token fragment in argv and private handoff file read denied with EACCES"
+    ]
+  },
+  "checks": {
+    "nodeTests": 51,
+    "pythonTests": 21,
+    "browserFlows": 7,
+    "composeChecks": 11,
+    "runtimeNetworkAudit": "pass",
+    "release": "manifest/checksum/standalone verification passed"
+  },
+  "limits": [
+    "Synthetic fake CLI only; no real model request or private user content",
+    "Real CLI installations and deployment platforms require separate verification",
+    "Host CLI/MCP/descendant, browser-global and daemon network policy require independent actual-host evidence",
+    "Browser-global kernel launch blocked by user-namespace EPERM without weakening sandbox",
+    "Build/CI tooling intentionally downloads dependencies; audit-only probes intentionally test network controls",
+    "Same-UID processes share local account authority; app is not an OS sandbox"
+  ]
+}

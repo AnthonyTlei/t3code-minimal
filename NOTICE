@@ -1,0 +1,9 @@
+T3 Code Local includes code and interface styling derived from T3 Code.
+Copyright (c) 2026 T3 Tools Inc.
+Upstream source: https://github.com/pingdotgg/t3code
+Pinned revision: 975b3dc56850d8a22dc90462219e53be95d8dcf7
+
+The upstream MIT copyright and permission notice is preserved in LICENSE.
+Retained and adapted frontend provenance is recorded in minimal/web/UPSTREAM.md.
+Built frontend dependency notices are included in dist/THIRD-PARTY-NOTICES.txt.
+The container retains Debian package copyright notices under /usr/share/doc.

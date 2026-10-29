@@ -1,0 +1,151 @@
+{
+  "result": "pass",
+  "scope": "Kernel network/process syscalls for synthetic driver, actual wrapper backend, fake CLI and all traced threads/descendants in a local Docker Linux VM",
+  "platform": {
+    "container": "Debian 12 ARM64",
+    "node": "24.18.0",
+    "network": "none",
+    "nonRoot": true,
+    "droppedCapabilities": "ALL",
+    "noNewPrivileges": true,
+    "rootFilesystem": "read-only",
+    "additionalPtraceCapability": false
+  },
+  "image": {
+    "id": "sha256:6c3ca06f21475abc99fb786a8b84990757a1d7461fa9706b3dd09e185ea9e4ef",
+    "os": "linux",
+    "arch": "arm64"
+  },
+  "tools": [
+    "chromium=156.0.8078.47-1~deb12u1",
+    "strace=6.1-0.1"
+  ],
+  "counts": {
+    "audit-driver": {
+      "tasks": 12,
+      "networkSyscalls": 321,
+      "connectAttempts": 16,
+      "loopbackConnectAttempts": 16,
+      "externalConnectAttempts": 0,
+      "sendCalls": 1,
+      "bindCalls": 2
+    },
+    "wrapper-backend": {
+      "tasks": 36,
+      "networkSyscalls": 123,
+      "connectAttempts": 0,
+      "loopbackConnectAttempts": 0,
+      "externalConnectAttempts": 0,
+      "sendCalls": 0,
+      "bindCalls": 2
+    },
+    "positive-control-descendant": {
+      "tasks": 8,
+      "networkSyscalls": 73,
+      "connectAttempts": 8,
+      "loopbackConnectAttempts": 4,
+      "externalConnectAttempts": 4,
+      "sendCalls": 1,
+      "bindCalls": 0
+    },
+    "fake-cli": {
+      "tasks": 21,
+      "networkSyscalls": 46,
+      "connectAttempts": 0,
+      "loopbackConnectAttempts": 0,
+      "externalConnectAttempts": 0,
+      "sendCalls": 0,
+      "bindCalls": 0
+    },
+    "browser": {
+      "tasks": 16,
+      "networkSyscalls": 6,
+      "connectAttempts": 0,
+      "loopbackConnectAttempts": 0,
+      "externalConnectAttempts": 0,
+      "sendCalls": 0,
+      "bindCalls": 0
+    }
+  },
+  "positiveControls": {
+    "pid": 21,
+    "role": "positive-control-descendant",
+    "successfulDns": [
+      "127.0.0.1"
+    ],
+    "blockedDns": "ECONNREFUSED",
+    "blockedTcp": "ENETUNREACH",
+    "redirect": {
+      "status": 200,
+      "redirected": true,
+      "text": "local positive control"
+    },
+    "websocket": "opened",
+    "blockedRedirect": "ENETUNREACH",
+    "blockedWebsocket": "error",
+    "httpPaths": [
+      "/redirect",
+      "/final",
+      "/ws",
+      "/redirect-blocked"
+    ],
+    "dnsQueries": 1
+  },
+  "scenarios": [
+    "cold start",
+    "20000 ms idle and SSE heartbeat",
+    "stream",
+    "concurrent chats",
+    "approval",
+    "question",
+    "cancel",
+    "native error",
+    "malformed settings",
+    "removed route",
+    "shutdown",
+    "restart/resume",
+    "native helper absence",
+    "malformed persisted state"
+  ],
+  "limitations": [
+    "synthetic fake CLI only",
+    "sandboxed browser could not launch; see browserAudit diagnostics",
+    "not a deployment-host verification",
+    "network-none test namespace, not a production deployment topology",
+    "socket observation covers the bounded synthetic scenarios and stated idle interval only",
+    "a real Codex installation and its network/MCP/child behavior were not executed",
+    "raw send/receive arguments are kept opaque to avoid recording auth payloads; unexpected sends by app actors fail the audit",
+    "HTTP redirect and WebSocket success is corroborated by the controlled local server and probe result; syscall data alone does not identify HTTP application semantics",
+    "Browser syscall scope depends on browserAudit status; a blocked sandboxed launch does not verify browser page/global networking. Production browser policy remains separate from app source code."
+  ],
+  "browserAudit": {
+    "status": "blocked",
+    "code": "SANDBOXED_BROWSER_LAUNCH_FAILED",
+    "reason": "Chromium sandbox could not create a user namespace: clone(CLONE_NEWUSER|SIGCHLD) = -1 EPERM; security profile was not relaxed."
+  },
+  "sourceHashes": {
+    "dist/THIRD-PARTY-NOTICES.txt": "41f5d597dddad6b237540d6bfe4980e3e766c61098032f5bcfaa54385e55333b",
+    "dist/assets/index-BPNeXMLW.css": "c2d58625c1fab6d4a560c1894162b698a141059ce7215129decce53346c8fb3e",
+    "dist/assets/index-DyFOI8z_.js": "ee2422d3e697c974196dd8295eb5422b131058d188ef7579b2522cf6e9ee3a00",
+    "dist/index.html": "7434b8b29927c8b703a57d4109ca6956e184b671c7017652f90b5f7a9ab882e2",
+    "minimal/server/bridge-client.mjs": "60f6a0aee0545eabd1b5f377738bd772c789a7f122ba8e858667f612b6960b10",
+    "minimal/server/bridge.mjs": "9d7418b50ddf7e81e7e903c8d1d548b936b1b4a4aa6c05c2c92996b0e8e1c70b",
+    "minimal/server/codex.mjs": "47b1669b0afdab4b776a89201849a65ad03e876733711e6ad6575568bbe8b6cd",
+    "minimal/server/connection.mjs": "6f99d9e4f929030ad9391337e82fd1be64e3355308d59593ba1aeb4001e4ca2e",
+    "minimal/server/executable.mjs": "b83c79e9b39e77672472f8bbeeffcd425ff4f5fb790d321ab4483b4a6ded78a4",
+    "minimal/server/health.mjs": "7a1a5999f5d1146301e9e377faf936dcc3f4f35401db8b947c7aa3dab242b463",
+    "minimal/server/launch.mjs": "27b997fa2d732a58e95f6e96c5f682982307d31f9195faf042fa5f8a68a54e90",
+    "minimal/server/main.mjs": "1d7a545ae00410fcda4521a6643ccfe9286ca4b434a7beead27d848a4a39fdc0",
+    "minimal/server/server.mjs": "26ae80ce910a528319fc4e532346ae81dcfa974146d2a72e5012736d9f4d1d53",
+    "minimal/server/store.mjs": "91e5e13a8c5b26c5b6126f0492a30daa288d6f4a92065cb6bd7fd7f67300044c",
+    "minimal/server/workspace.mjs": "e0687c290ea05251a2076f02b8d99bb899c3f8761d03740cf2650e0cbf8025a4",
+    "minimal/test/fake-codex.mjs": "29513bb14df8b2d612ab348c6f6dfbfa59ab3c24503a38eef5086d1202bf85b5"
+  },
+  "rawEvidenceDirectory": "Raw local audit traces are not distributed; reproduce with minimal/audit/run.sh",
+  "capabilityLeakCheck": {
+    "status": "pass",
+    "checkedCapabilityCount": 2
+  },
+  "verifiedDate": "2026-10-29",
+  "summarySha256": "cdb20f81508f331ac8d64723745738ec0ed469c9c9558a861b60b0207f14ba1f"
+}

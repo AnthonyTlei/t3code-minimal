@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/pingdotgg/t3code",
+  "revision": "975b3dc56850d8a22dc90462219e53be95d8dcf7",
+  "commitDate": "2026-10-28T03:52:05-05:00",
+  "commitSubject": "fix(client-runtime): keep subagent questions off parent threads (#26367)",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 T3 Tools Inc.",
+  "licenseNoticePreserved": true
+}

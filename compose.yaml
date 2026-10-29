@@ -1,0 +1,39 @@
+name: t3code-local
+services:
+  app:
+    image: t3code-local:${T3_IMAGE_TAG:-0.1.1}
+    build:
+      context: .
+      target: ${T3_BUILD_TARGET:-production}
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /run/t3:rw,nosuid,nodev,noexec,mode=0700,uid=${LOCAL_UID:-1000},gid=${LOCAL_GID:-1000}
+      - /tmp:rw,nosuid,nodev,noexec,mode=1777,size=64m
+    environment:
+      T3_PORT: "${T3_PORT:-3777}"
+    volumes:
+      - appdata:/data
+    init: true
+    restart: "no"
+    stop_grace_period: 15s
+    pids_limit: 256
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
+    healthcheck:
+      test: [CMD, node, minimal/server/health.mjs, --socket, /run/t3/http.sock]
+      interval: 5s
+      timeout: 4s
+      start_period: 10s
+      retries: 5
+# scripts/manage.py creates the explicit roots, private state mount and command.
+# There are no published container ports, host networking or daemon socket mounts.
+volumes:
+  appdata:

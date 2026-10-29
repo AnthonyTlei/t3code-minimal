@@ -1,0 +1,46 @@
+{
+  "result": "pass",
+  "platform": "darwin/arm64",
+  "checks": [
+    "extracted archive configured, built prebuilt image, started with Make, and passed doctor/status/health",
+    "make open gives the OS opener only a private file URI, with no bearer capability in argv",
+    "health is private-data-free and no CLI starts on cold start or readiness checks",
+    "workspace overlap cannot expose masked private control state",
+    "real browser loaded container assets, streamed host-CLI work and answered one-time approval through Docker stdio",
+    "independent sessions, native questions and cancellation work through the packaged host bridge",
+    "existing host CLI argv/environment are preserved, and container Git diffs/worktrees stay functional",
+    "restart preserves history/native resume and repeated make on is idempotent",
+    "actual container is network-none/read-only/capability-dropped with no ports or Docker socket; isolated positive probe is blocked",
+    "logs omit exact launch/control tokens and make off preserves state while health fails",
+    "NO_BUILD=1 starts the staged image after complete shutdown and retains persisted history"
+  ],
+  "model": "deterministic host fake CLI",
+  "secretsRetained": false,
+  "image": "sha256:725d388be124c72c2614be4e5f4dd6108ffa75c7ea3313876f4ea66432c3a7cd",
+  "browser": "156.0.8078.4",
+  "container": {
+    "platform": "linux/arm64",
+    "networkMode": "none",
+    "readonly": true,
+    "capDrop": [
+      "ALL"
+    ]
+  },
+  "sourceHashes": {
+    "Dockerfile": "b771843a54b1148952230f01df86062c235aede2b0cc4f756dc2b7fad698a53f",
+    "compose.yaml": "7f3e33c2f95ee0ebb40c706649c7586ddf37991b7f994558c7d4c9c697ff4f41",
+    "Makefile": "43b672ca01f34a6cd42834923b778f2c85d7c930099b35cc20fcd8f39f9117e4",
+    "scripts/manage.py": "3d8945e4cfafad4ae1086019b8bf2dbc21f206e38d96db6793021b916e1cdd86",
+    "minimal/server/bridge-client.mjs": "60f6a0aee0545eabd1b5f377738bd772c789a7f122ba8e858667f612b6960b10",
+    "minimal/server/bridge.mjs": "9d7418b50ddf7e81e7e903c8d1d548b936b1b4a4aa6c05c2c92996b0e8e1c70b",
+    "minimal/server/codex.mjs": "47b1669b0afdab4b776a89201849a65ad03e876733711e6ad6575568bbe8b6cd",
+    "minimal/server/connection.mjs": "6f99d9e4f929030ad9391337e82fd1be64e3355308d59593ba1aeb4001e4ca2e",
+    "minimal/server/executable.mjs": "b83c79e9b39e77672472f8bbeeffcd425ff4f5fb790d321ab4483b4a6ded78a4",
+    "minimal/server/health.mjs": "7a1a5999f5d1146301e9e377faf936dcc3f4f35401db8b947c7aa3dab242b463",
+    "minimal/server/launch.mjs": "27b997fa2d732a58e95f6e96c5f682982307d31f9195faf042fa5f8a68a54e90",
+    "minimal/server/main.mjs": "1d7a545ae00410fcda4521a6643ccfe9286ca4b434a7beead27d848a4a39fdc0",
+    "minimal/server/server.mjs": "26ae80ce910a528319fc4e532346ae81dcfa974146d2a72e5012736d9f4d1d53",
+    "minimal/server/store.mjs": "91e5e13a8c5b26c5b6126f0492a30daa288d6f4a92065cb6bd7fd7f67300044c",
+    "minimal/server/workspace.mjs": "e0687c290ea05251a2076f02b8d99bb899c3f8761d03740cf2650e0cbf8025a4"
+  }
+}

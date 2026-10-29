@@ -1,142 +1,65 @@
-# T3 Code
+# T3 Code Local
 
-T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).
+A small local web UI for your existing Codex CLI. Projects, conversations and code stay in a familiar T3 interface, with local history and explicit workspace access.
 
-Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, OpenCode, and Google Antigravity. If they're set up on your computer, T3 Code can control them.
+![T3 Code Local with synthetic project data](docs/images/workspace.png)
 
-## "Wait, what are you selling me?"
+## Features
 
-Nothing. We built T3 Code because we wanted the best possible development experience with agents. We were inspired by existing solutions like the Codex desktop app, Conductor, Claude Desktop and Cursor Glass, but none met our bar.
+- Multiple projects and authorized roots, with independent concurrent chats.
+- Streaming, cancellation, native approvals and questions.
+- Local history, resume, manual names and archives.
+- Local code and diffs, explicit Git worktrees, and light/dark themes.
+- Model and reasoning choices from the installed CLI's permitted capabilities.
 
-We wanted something performant, remote-ready, and truly open. If we ever go the wrong direction, we want you to have everything you need to fork and build the editor that you want.
+The wrapper has no account, telemetry, update service, cloud sync, relay or background AI helpers. It never installs Codex or changes its authentication, endpoints, sandbox, approvals, skills or MCP configuration.
 
-## Installation
+## Quick start
 
-> [!WARNING]
-> T3 Code currently supports Codex, Claude, Cursor, Grok Build, OpenCode, and Antigravity. Install and authenticate at least one provider before use:
->
-> - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
-> - Claude: install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`
-> - Cursor: install [Cursor CLI](https://cursor.com/cli) and run `agent login`
-> - Grok Build: install [Grok Build CLI](https://x.ai/cli) and run `grok login`
-> - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
-> - Antigravity: enable it in Settings, then use **Install Antigravity** and **Sign in with Google**. No CLI is required.
+You need an already configured approved Codex CLI, Python 3.8+, Make, and access to a **local** Docker daemon with Docker Compose. Image builds download pinned build dependencies; application startup performs no installer or provider download.
 
-### Command line
-
-```bash
-curl -fsSL https://t3.codes/install.sh | sh
+```sh
+make configure ROOT=/absolute/path/to/workspace CODEX=/absolute/path/to/codex
+make up
+make open
 ```
 
-On Windows, in PowerShell:
+`make up` builds the image and starts the local service. `make open` authenticates the browser through a private local file, keeping its access token out of process arguments and logs. The default browser address is `http://127.0.0.1:3777`; open it through `make open` to authenticate.
 
-```powershell
-irm https://t3.codes/install.ps1 | iex
-```
+With an already staged image, use `make up NO_BUILD=1` to start without building or pulling. Chat history lives in a Docker-managed named volume; `make down` preserves it. Private host configuration and the temporary launch capability stay under `.local-state`.
 
-Then run `t3` to start the server and open the local web app. `t3 service install` keeps it running in the background, `t3 update` moves to a newer release, and `t3 --help` has the full reference.
+Codex continues to run **on the host**, with its existing environment and controls. The wrapper container has no network interface beyond its own loopback. A local host bridge carries browser traffic and Codex stdio through Docker exec; no credential directory, Docker socket, host network or privileged container is required. [How it works →](docs/GETTING-STARTED.md)
 
-To try it once without installing, run `npx t3@latest` instead.
+## Everyday commands
 
-### Desktop app
+| Command | Purpose |
+| --- | --- |
+| `make up` / `make on` | Build as needed and start |
+| `make down` / `make off` | Stop; keep configuration and chat history |
+| `make restart` | Restart the local service |
+| `make open` | Open the authenticated local UI |
+| `make logs` | Follow operational logs |
+| `make status` | Inspect the local service |
+| `make health` | Check the wrapper and bridge; no model request |
+| `make doctor` | Inspect prerequisites without changing settings |
+| `make help` | Show available commands |
 
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
+Prefer running without Docker? [Native Node setup](docs/GETTING-STARTED.md#native-node-setup) uses Node 24.18.0 and the same approved CLI.
 
-#### Windows (`winget`)
+The [release archive](docs/GETTING-STARTED.md#release-archive) also includes Make, Compose and a prebuilt Docker target, so its Docker workflow needs no Node installation on the host.
 
-```bash
-winget install T3Tools.T3Code
-```
+## Boundaries and status
 
-#### Windows (`scoop`)
+Chats share files. A worktree isolates one repository; other roots and repositories remain shared. Workspace selection never broadens Codex's own policy.
 
-```bash
-scoop install extras/t3code
-```
+The reduced app renders escaped text and code rather than raw HTML, remote images or embedded previews. The wrapper has zero runtime npm dependencies. Browser-global traffic and approved Codex/child traffic require separate deployment enforcement; local application tests are not a universal zero-egress guarantee.
 
-#### macOS (Homebrew)
-
-```bash
-brew install --cask t3-code
-```
-
-#### Debian, Ubuntu (`.deb`)
-
-Download the `.deb` from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), then:
-
-```bash
-sudo apt install ./T3-Code-*.deb
-```
-
-#### Arch Linux (AUR)
-
-Stable:
-
-```bash
-yay -S t3code-bin
-```
-
-Nightly:
-
-```bash
-yay -S t3code-nightly-bin
-```
-
-The AUR packaging is maintained in this repository under [`packaging/aur`](./packaging/aur).
-
-## Some notes
-
-We are very very early in this project. Expect bugs.
-
-We are (mostly) not accepting contributions yet. Small fixes may be considered. Big features will not be.
+Local automated and browser tests use synthetic data and a deterministic fake CLI. **Validate your installed Codex version and deployment platform before relying on the application.** Health checks do not establish authentication, model access or policy compliance. See [verification evidence](docs/VERIFICATION.md) and the [deployment smoke test](docs/DEPLOYMENT-SMOKE.md).
 
 ## Documentation
 
-Full docs live in [docs/](./docs). There's no docs site yet.
+[Getting started](docs/GETTING-STARTED.md) · [Operations](docs/OPERATIONS.md) · [Development](docs/DEVELOPMENT.md) · [Security](docs/SECURITY.md) · [All documentation](docs/README.md)
 
-- [FAQ](./docs/user/faq.md)
-- [Install and first run](./docs/user/install.md)
-- [Permission modes](./docs/user/permission-modes.md)
-- [Keyboard shortcuts](./docs/user/keybindings.md)
-- [Project settings](./docs/user/project-settings.md)
-- [Appearance preferences](./docs/user/appearance.md)
-- [Remote access from a phone or another machine](./docs/user/remote-access.md)
-- [Connect Claude Code, Codex, ChatGPT and other agents over MCP](./docs/user/outside-agents.md)
-- [Keeping app and server in sync](./docs/user/updating.md)
-- [Source control integrations](./docs/user/source-control.md)
-- Multiple accounts: [Codex](./docs/user/providers-codex.md) · [Claude](./docs/user/providers-claude.md)
-- [Run T3 Code as a background service](./docs/user/background-service.md)
+## License and attribution
 
-Building from source? Start at [docs/internals/overview.md](./docs/internals/overview.md).
-
-## If you REALLY want to contribute still.... read this first
-
-### Install `vp`
-
-T3 Code uses Vite+ so you'll need to install the global `vp` command-line tool.
-
-#### macOS / Linux
-
-```bash
-curl -fsSL https://vite.plus | bash
-```
-
-#### Windows
-
-```bash
-irm https://vite.plus/ps1 | iex
-```
-
-Checkout their getting started guide for more information: https://viteplus.dev/guide/
-
-### Install dependencies
-
-```bash
-vp i
-```
-
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before reporting a bug or opening a PR.
-
-Have a feature request? Start an [Ideas discussion](https://github.com/pingdotgg/t3code/discussions/categories/ideas).
-
-Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
+MIT. Based on [T3 Code](https://github.com/pingdotgg/t3code), pinned at `975b3dc56850d8a22dc90462219e53be95d8dcf7`. Upstream copyright and permission notices are preserved in [LICENSE](LICENSE). [Retained UI provenance](minimal/web/UPSTREAM.md) records copied and adapted components; built releases include third-party notices.

@@ -1,0 +1,16 @@
+*
+!Dockerfile
+!package.json
+!package-lock.json
+!LICENSE
+!NOTICE
+!minimal/
+!minimal/server/
+!minimal/server/**
+!minimal/web/
+!minimal/web/**
+!minimal/vite.config.ts
+!scripts/
+!scripts/licenses.mjs
+!dist/
+!dist/**
