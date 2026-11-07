@@ -137,6 +137,19 @@ test('roots, settings and model controls fail closed, and large SSE snapshots su
   assert.equal(large.messages.at(-1).text.length, text.length);
 });
 
+test('native-resolved approval disappears while HTTP/SSE keeps the turn active and rejects a stale answer', async t => {
+  const h = await harness(t); const project = await h.project(); const chat = await h.chat(project.id);
+  const waiting = observe(h.app, chat.id, current => current.status === 'awaiting_approval');
+  await h.request(`/api/chats/${chat.id}/messages`, 'POST', { text: 'resolved-approval' });
+  const approval = (await waiting).pendingRequests[0];
+  const running = await observe(h.app, chat.id, current => current.status === 'running' && !current.pendingRequests.length);
+  assert.equal(running.finishedAt, undefined);
+  assert.equal((await h.request(`/api/chats/${chat.id}/responses`, 'POST', { requestId: approval.id, result: { decision: 'accept' } })).status, 409);
+  assert.equal((await h.request(`/api/chats/${chat.id}/messages`, 'POST', { text: 'overlap' })).status, 409);
+  const stopped = observe(h.app, chat.id, current => current.status === 'interrupted');
+  await h.request(`/api/chats/${chat.id}/cancel`, 'POST', {}); await stopped;
+});
+
 test('launch configuration requires explicit roots and rejects network/policy options', () => {
   assert.throws(() => parseArgs([]), /explicit --root/);
   assert.throws(() => parseArgs(['--root', '.', '--host', '0.0.0.0']), /Unknown option/);

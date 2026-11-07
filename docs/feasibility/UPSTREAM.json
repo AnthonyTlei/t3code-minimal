@@ -5,5 +5,11 @@
   "commitSubject": "fix(client-runtime): keep subagent questions off parent threads (#26367)",
   "license": "MIT",
   "copyright": "Copyright (c) 2026 T3 Tools Inc.",
-  "licenseNoticePreserved": true
+  "licenseNoticePreserved": true,
+  "lastReview": {
+    "revision": "006d7e38f0485431c314a1afcc39fa823f379092",
+    "date": "2026-11-07",
+    "record": "docs/UPSTREAM-UPDATES.md",
+    "mode": "selective behavior ports; original extraction pin retained"
+  }
 }

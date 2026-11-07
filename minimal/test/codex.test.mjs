@@ -56,6 +56,77 @@ test('streaming and local activity translate without policy, auth, summary or MC
   assert.deepEqual(requests.find((request) => request.method === 'turn/start').params, { threadId: result.threadId, input: [{ type: 'text', text: 'hello' }] });
 });
 
+test('fast completion and early approvals bind to the acknowledged turn without reviving finished work', async (t) => {
+  const f = await fixture(t);
+  const completed = until(f.session, event => event.type === 'turn_completed');
+  const result = await f.session.prompt({ text: 'fast-turn' }); await completed;
+  assert.equal(f.session.turnId, null); assert.equal(f.session.status, 'idle');
+  assert.equal(result.turnId, 'synthetic-turn-1');
+  assert.equal(f.events.find(event => event.type === 'message_delta').delta, 'Synthetic fast response');
+  const approval = once(f.session, 'request');
+  await f.session.prompt({ text: 'early-approval' });
+  const [request] = await approval;
+  assert.equal(request.params.turnId, 'synthetic-turn-2');
+  const approved = until(f.session, event => event.type === 'turn_completed');
+  await f.session.respond({ requestId: request.id, result: { decision: 'accept' } }); await approved;
+  await f.session.prompt({ text: 'early-resolved' });
+  assert.equal(f.session.pendingApprovals.size, 0);
+  assert.equal(f.session.status, 'running');
+  const resolved = f.events.findLast(event => event.type === 'request_resolved');
+  await assert.rejects(f.session.respond({ requestId: resolved.requestId, result: { decision: 'accept' } }), /no longer pending/);
+});
+
+test('stale native turns cannot replace active work, expose old output or solicit approvals', async (t) => {
+  const f = await fixture(t); const shown = []; f.session.on('request', request => shown.push(request));
+  const completed = until(f.session, event => event.type === 'turn_completed');
+  await f.session.prompt({ text: 'early-stale' }); await completed;
+  assert.equal(shown.length, 0);
+  assert.doesNotMatch(JSON.stringify(f.events), /STALE_NATIVE_OUTPUT|stale command/);
+  await f.session.prompt({ text: 'hold' });
+  const currentTurn = f.session.turnId; const before = f.events.length;
+  for (const scope of [
+    { threadId: f.session.threadId, turnId: 'synthetic-turn-1' },
+    { threadId: 'other-thread', turnId: currentTurn },
+    { turnId: currentTurn },
+  ]) {
+    f.session._notification('turn/started', { ...scope, turn: { id: scope.turnId } });
+    f.session._notification('item/agentMessage/delta', { ...scope, delta: 'stale text' });
+    f.session._notification('item/commandExecution/outputDelta', { ...scope, delta: 'stale text' });
+    f.session._notification('turn/completed', { ...scope, turn: { id: scope.turnId, status: 'completed' } });
+  }
+  assert.equal(f.session.turnId, currentTurn); assert.equal(f.events.length, before);
+  const interrupted = until(f.session, event => event.type === 'turn_completed');
+  await f.session.interrupt(); await interrupted;
+  const exited = once(f.session, 'exit');
+  await assert.rejects(f.session.prompt({ text: 'reused-turn' }), /reused turn/); await exited;
+});
+
+test('notifications buffered before turn acknowledgement have a strict memory bound', () => {
+  for (const mode of ['count', 'bytes']) {
+    const session = new CodexSession({ cwd: process.cwd() });
+    session.awaitingTurnStart = true;
+    if (mode === 'bytes') session._message({ method: 'item/agentMessage/delta', params: { delta: 'x'.repeat(4 * 1024 * 1024) } });
+    else for (let index = 0; index < 1025; index++) session._message({ method: 'item/started', params: {} });
+    assert.equal(session.closed, true);
+    assert.ok(session.startNotifications.length <= 1024);
+  }
+});
+
+test('invalid acknowledgements and fatal replay close the owned session without exposing later approvals', async (t) => {
+  for (const text of ['invalid-ack', 'invalid-replay']) {
+    const f = await fixture(t); const approvals = []; f.session.on('request', request => approvals.push(request));
+    const exited = once(f.session, 'exit');
+    await assert.rejects(f.session.prompt({ text }), /invalid|closed/); await exited;
+    assert.equal(approvals.length, 0); assert.equal(f.session.closed, true);
+    assert.doesNotMatch(JSON.stringify(f.events), /MUST_NOT_EXPOSE_APPROVAL/);
+    await assert.rejects(f.session.prompt({ text: 'no automatic retry' }), /closed/);
+  }
+  const session = new CodexSession({ cwd: process.cwd() });
+  session.seenTurnIds = new Set(Array.from({ length: 10_000 }, (_, i) => String(i)));
+  await assert.rejects(session.prompt({ text: 'capacity cannot start native work' }), /session turn limit/);
+  assert.equal(session.child, null);
+});
+
 test('capabilities are CLI-derived, paginated and validate model/reasoning selection', async (t) => {
   const f = await fixture(t);
   const capabilities = await f.session.capabilities();
@@ -118,6 +189,30 @@ test('native availableDecisions narrows one-time approval choices', async (t) =>
   await assert.rejects(f.session.respond({ requestId: request.id, result: { decision: 'accept' } }), /one-time/);
   await f.session.respond({ requestId: request.id, result: { decision: 'decline' } });
   await completed;
+});
+
+test('native request resolution is scoped, type-sensitive and releases stale approval slots', async (t) => {
+  const f = await fixture(t);
+  await f.session.prompt({ text: 'hold' });
+  const params = { threadId: f.session.threadId, turnId: f.session.turnId, command: 'printf synthetic' };
+  for (const id of [42, '42']) f.session._serverRequest({ id, method: 'item/commandExecution/requestApproval', params });
+  for (const resolution of [{ requestId: 42 }, { threadId: 'other-thread', requestId: 42 }, { threadId: params.threadId, requestId: {} }]) {
+    f.session._notification('serverRequest/resolved', resolution);
+  }
+  assert.equal(f.session.pendingApprovals.size, 2);
+  f.session._notification('serverRequest/resolved', { threadId: params.threadId, requestId: 42 });
+  assert.equal(f.session.pendingApprovals.size, 1);
+  assert.equal(f.session.status, 'waiting');
+  await assert.rejects(f.session.respond({ requestId: 42, result: { decision: 'accept' } }), /no longer pending/);
+  f.session._notification('serverRequest/resolved', { threadId: params.threadId, requestId: '42' });
+  assert.equal(f.session.status, 'running');
+  for (let id = 1000; id < 1040; id++) {
+    f.session._serverRequest({ id, method: 'item/commandExecution/requestApproval', params });
+    assert.equal(f.session.pendingApprovals.size, 1);
+    f.session._notification('serverRequest/resolved', { threadId: params.threadId, requestId: id });
+  }
+  assert.equal(f.session.pendingApprovals.size, 0);
+  assert.equal(f.events.filter(event => event.type === 'request_resolved' && event.reason === 'native-resolved').length, 42);
 });
 
 test('questions require the exact pending ids and valid answer payloads', async (t) => {

@@ -39,6 +39,13 @@ function ask(method, turnId, params, onResponse) {
 function runTurn(turnId, prompt) {
   notify('turn/started', { threadId, turn: { id: turnId, status: 'inProgress', items: [] } });
   if (prompt === 'hold') { heldTurn = turnId; return; }
+  if (prompt === 'resolved-approval') {
+    heldTurn = turnId;
+    const requestId = serverRequestId;
+    ask('item/commandExecution/requestApproval', turnId, { command: 'printf synthetic', cwd: process.cwd() }, () => {});
+    setTimeout(() => notify('serverRequest/resolved', { threadId, requestId }), 500);
+    return;
+  }
   if (prompt === 'crash') { process.stderr.write('sk-synthetic-secret must not escape diagnostic stderr\n'); process.exit(7); }
   if (prompt === 'malformed') { process.stdout.write('not-json\n'); return; }
   if (prompt === 'oversized') { process.stdout.write(`${'x'.repeat(4 * 1024 * 1024 + 1)}\n`); return; }
@@ -94,6 +101,41 @@ input.on('line', (line) => {
     const prompt = message.params.input[0].text;
     if (prompt === 'rpc-error') { write({ id: message.id, error: { code: -32000, message: 'sk-synthetic-secret in native error', data: { secret: 'synthetic-credential' } } }); return; }
     const turnId = `synthetic-turn-${++turnNumber}`;
+    if (prompt === 'fast-turn') {
+      notify('turn/started', { threadId, turn: { id: turnId } });
+      notify('item/agentMessage/delta', { threadId, turnId, itemId: 'fast-message', delta: 'Synthetic fast response' });
+      notify('turn/completed', { threadId, turn: { id: turnId, status: 'completed' } });
+      reply(message.id, { turn: { id: turnId } }); return;
+    }
+    if (prompt === 'early-approval') {
+      runTurn(turnId, 'approval'); reply(message.id, { turn: { id: turnId } }); return;
+    }
+    if (prompt === 'early-resolved') {
+      heldTurn = turnId;
+      const requestId = serverRequestId;
+      ask('item/commandExecution/requestApproval', turnId, { command: 'printf synthetic' }, () => {});
+      notify('serverRequest/resolved', { threadId, requestId });
+      reply(message.id, { turn: { id: turnId } }); return;
+    }
+    if (prompt === 'early-stale') {
+      const staleId = 'synthetic-stale-turn';
+      notify('turn/started', { threadId, turn: { id: staleId } });
+      notify('item/agentMessage/delta', { threadId, turnId: staleId, itemId: 'stale-message', delta: 'STALE_NATIVE_OUTPUT' });
+      ask('item/commandExecution/requestApproval', staleId, { command: 'stale command' }, () => {});
+      notify('turn/completed', { threadId, turn: { id: staleId, status: 'completed' } });
+      runTurn(turnId, 'hello'); reply(message.id, { turn: { id: turnId } }); return;
+    }
+    if (prompt === 'reused-turn') {
+      reply(message.id, { turn: { id: 'synthetic-turn-1' } }); return;
+    }
+    if (prompt === 'invalid-ack') {
+      reply(message.id, { turn: { id: '' } }); return;
+    }
+    if (prompt === 'invalid-replay') {
+      write({ id: {}, method: 'item/commandExecution/requestApproval', params: { threadId, turnId } });
+      ask('item/commandExecution/requestApproval', turnId, { command: 'MUST_NOT_EXPOSE_APPROVAL' }, () => {});
+      reply(message.id, { turn: { id: turnId } }); return;
+    }
     reply(message.id, { turn: { id: turnId, status: 'inProgress', items: [] } });
     setImmediate(() => runTurn(turnId, prompt));
     return;

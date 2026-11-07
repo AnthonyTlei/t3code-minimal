@@ -69,6 +69,9 @@ export class CodexSession extends EventEmitter {
     this.models = null;
     this.startingTurn = false;
     this.awaitingTurnStart = false;
+    this.startNotifications = [];
+    this.startNotificationBytes = 0;
+    this.seenTurnIds = new Set();
     this.closedPromise = null;
   }
 
@@ -101,7 +104,7 @@ export class CodexSession extends EventEmitter {
     this.child.once('exit', (code, signal) => this._exited(code, signal));
     this.child.once('close', (code, signal) => { if (!this.closed) this._exited(code, signal); });
     try {
-      await this._request('initialize', { clientInfo: { name: 't3-code-minimal', title: 'T3 Code Minimal', version: '0.1.1' }, capabilities: { experimentalApi: true } });
+      await this._request('initialize', { clientInfo: { name: 't3-code-minimal', title: 'T3 Code Minimal', version: '0.1.2' }, capabilities: { experimentalApi: true } });
       this._write({ method: 'initialized' });
       this.ready = true;
       this._status('idle');
@@ -169,6 +172,7 @@ export class CodexSession extends EventEmitter {
     requireKeys(options, ['text', 'model', 'reasoning'], 'turn options');
     if (typeof options.text !== 'string' || !options.text.trim() || Buffer.byteLength(options.text) > MAX_TEXT_BYTES) throw new Error('A non-empty prompt up to 1 MiB is required');
     if (this.startingTurn || this.turnId) throw new Error('This chat already has an active turn');
+    if (this.seenTurnIds.size >= 10_000) throw new Error('The session turn limit was reached; restart the local service before continuing');
     this.startingTurn = true;
     try {
       await this.startThread();
@@ -185,15 +189,35 @@ export class CodexSession extends EventEmitter {
       }
       this._status('running');
       this.awaitingTurnStart = true;
-      let response;
-      try { response = await this._request('turn/start', params); }
-      finally { this.awaitingTurnStart = false; }
-      if (!isObject(response?.turn) || typeof response.turn.id !== 'string') throw new Error('Codex returned an unsupported turn response');
-      // A very short turn can complete before its turn/start response arrives.
-      if (this.status !== 'idle') this.turnId = response.turn.id;
-      return { threadId: this.threadId, turnId: response.turn.id };
+      try {
+        const response = await this._request('turn/start', params);
+        if (!isObject(response?.turn) || typeof response.turn.id !== 'string' || !response.turn.id || response.turn.id.length > 200 || this.seenTurnIds.has(response.turn.id)) {
+          const error = new Error('Codex returned an invalid or reused turn identifier');
+          this._fail(error); throw error;
+        }
+        this.seenTurnIds.add(response.turn.id);
+        this.turnId = response.turn.id;
+        this.awaitingTurnStart = false;
+        // Short turns and approvals can arrive before their response. Bind them to
+        // the acknowledged turn before exposing any output or one-time decision.
+        const notifications = this.startNotifications;
+        this.startNotifications = [];
+        for (const message of notifications) {
+          this._message(message);
+          if (this.closed || this.closing) throw new Error('Codex session closed while starting the turn');
+        }
+        return { threadId: this.threadId, turnId: response.turn.id };
+      } catch (error) {
+        // Buffered native work without a valid acknowledgement is ambiguous.
+        if (this.startNotifications.length) this._fail(error);
+        throw error;
+      } finally {
+        this.awaitingTurnStart = false;
+        this.startNotifications = [];
+        this.startNotificationBytes = 0;
+      }
     } catch (error) {
-      if (!this.turnId && !this.closed) this._status('idle');
+      if (!this.turnId && !this.closed && !this.closing) this._status('idle');
       throw error;
     } finally { this.startingTurn = false; }
   }
@@ -288,7 +312,15 @@ export class CodexSession extends EventEmitter {
   }
 
   _message(message) {
+    if (this.closed || this.closing) return;
     if (typeof message.method === 'string') {
+      if (this.awaitingTurnStart && (Object.hasOwn(message, 'id') || message.method === 'serverRequest/resolved' || message.method.startsWith('turn/') || message.method.startsWith('item/'))) {
+        this.startNotificationBytes += Buffer.byteLength(JSON.stringify(message));
+        if (this.startNotifications.length >= 1024 || this.startNotificationBytes > MAX_FRAME_BYTES) {
+          this._fail(new Error('Codex exceeded the pending turn notification limit'));
+        } else this.startNotifications.push(message);
+        return;
+      }
       if (Object.hasOwn(message, 'id')) { this._serverRequest(message); return; }
       this._notification(message.method, message.params);
       return;
@@ -307,7 +339,7 @@ export class CodexSession extends EventEmitter {
     if (!isId(message.id)) { this._fail(new Error('Codex sent an invalid server request identifier')); return; }
     const params = message.params;
     const kind = APPROVAL_METHODS.get(message.method);
-    const validScope = isObject(params) && params.threadId === this.threadId && typeof params.turnId === 'string' && (this.turnId ? params.turnId === this.turnId : this.awaitingTurnStart);
+    const validScope = isObject(params) && params.threadId === this.threadId && typeof params.turnId === 'string' && this.turnId !== null && params.turnId === this.turnId;
     const validQuestions = kind !== 'question' || (Array.isArray(params?.questions) && params.questions.length > 0 && params.questions.length <= 16 && params.questions.every((question) => isObject(question) && typeof question.id === 'string' && question.id.length > 0 && question.id.length <= 200 && !['__proto__', 'constructor', 'prototype'].includes(question.id) && typeof question.question === 'string' && question.isSecret !== true) && new Set(params.questions.map((question) => question.id)).size === params.questions.length);
     if (!kind || !validScope || !validQuestions || this.pendingApprovals.size >= 32 || this.pendingApprovals.has(requestKey(message.id))) {
       this._write({ id: message.id, error: { code: -32601, message: 'This client does not support this request' } });
@@ -339,11 +371,22 @@ export class CodexSession extends EventEmitter {
     if (!isObject(params)) return;
     const nativeThreadId = params.threadId ?? params.thread?.id;
     if (this.threadId && nativeThreadId && nativeThreadId !== this.threadId) return;
+    if (method === 'serverRequest/resolved') {
+      // Native resolution is not a new request or an approval. IDs keep their JSON type.
+      if (params.threadId !== this.threadId || !isId(params.requestId)) return;
+      if (!this.pendingApprovals.delete(requestKey(params.requestId))) return;
+      this._event('request_resolved', { requestId: params.requestId, reason: 'native-resolved' });
+      this._status(this.pendingApprovals.size ? 'waiting' : (this.turnId ? 'running' : 'idle'));
+      return;
+    }
+    if (method.startsWith('turn/') || method.startsWith('item/')) {
+      const nativeTurnId = params.turnId ?? params.turn?.id;
+      if (!this.turnId || params.threadId !== this.threadId || nativeTurnId !== this.turnId) return;
+    }
     const base = { nativeMethod: method, ...(typeof params.itemId === 'string' ? { itemId: params.itemId } : {}) };
     if (method === 'thread/started') return;
     if (method === 'turn/started') {
       if (typeof params.turn?.id !== 'string') return this._fail(new Error('Codex sent an invalid turn notification'));
-      this.turnId = params.turn.id;
       this._status('running');
       this._event('turn_started', { ...base, turnId: this.turnId });
     } else if (method === 'turn/completed') {
@@ -370,11 +413,11 @@ export class CodexSession extends EventEmitter {
   }
 
   _fail(error) {
-    if (this.closed) return;
+    if (this.closed || this.closing) return;
     this._event('error', { message: error.message });
     for (const pending of this.pendingRequests.values()) { clearTimeout(pending.timer); pending.reject(error); }
     this.pendingRequests.clear();
-    if (this.child?.pid) this.child.kill('SIGTERM');
+    if (this.child?.pid) void this.close().catch(() => {});
     else this._exited(null, null);
   }
 

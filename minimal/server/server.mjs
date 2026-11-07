@@ -154,7 +154,11 @@ export async function createApplication({ dataDir, roots, executable = 'codex', 
       await store.updateMessage(chat.id, id, { text: nextText, details: detail, status: event.stage === 'completed' ? 'completed' : 'streaming' }); notify(chat.id);
     } else if (event.type === 'turn_started') await updateChat(chat.id, { status: 'running', startedAt: Date.now() });
     else if (event.type === 'request_resolved') {
-      await updateChat(chat.id, { pendingRequests: chat.pendingRequests.filter(request => request.id !== event.requestId) });
+      const pendingRequests = chat.pendingRequests.filter(request => request.id !== event.requestId);
+      const status = pendingRequests.some(request => request.kind === 'question') ? 'awaiting_input'
+        : pendingRequests.length ? 'awaiting_approval' : 'running';
+      // Completion/exit events retain ownership of their terminal status.
+      await updateChat(chat.id, { pendingRequests, ...(BUSY.has(chat.status) ? { status } : {}) });
     } else if (event.type === 'turn_completed') {
       const interrupted = ['interrupted', 'cancelled', 'canceled'].includes(event.status);
       const failed = Boolean(event.message) || event.status === 'failed';
@@ -342,7 +346,7 @@ export async function createApplication({ dataDir, roots, executable = 'codex', 
       const url = new URL(request.url, address.url);
       if (url.pathname === '/healthz' && request.method === 'GET') {
         if (request.headers.origin && !address.origins.includes(request.headers.origin)) throw problem('Origin is not allowed', 403, 'ORIGIN_REJECTED');
-        return json(response, { status: 'ok', ready: Boolean(!closing && (!bridgeReady || bridgeReady())), version: '0.1.1' });
+        return json(response, { status: 'ok', ready: Boolean(!closing && (!bridgeReady || bridgeReady())), version: '0.1.2' });
       }
       if (url.pathname.startsWith('/api/')) return await api(request, response, url);
       if (request.method !== 'GET' && request.method !== 'HEAD') throw problem('Method not allowed', 405);

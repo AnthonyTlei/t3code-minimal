@@ -21,12 +21,16 @@ export function Dialog({ open, onOpenChange, children }: { open: boolean; onOpen
 export function DialogPopup({ children, className, bottomStickOnMobile: _bottomStickOnMobile, ...props }: ComponentProps<"dialog"> & { bottomStickOnMobile?: boolean }) {
   const dialog = useDialog();
   const element = useRef<HTMLDialogElement>(null);
+  const composing = useRef(false);
   // The browser supplies modal focus containment and focus restoration without injected styles.
   useEffect(() => {
+    composing.current = false;
     if (dialog.open && !element.current?.open) element.current?.showModal();
     else if (!dialog.open && element.current?.open) element.current.close();
   }, [dialog.open]);
-  return <dialog {...props} ref={element} className={cn("native-dialog dialog-glass rounded-2xl border", className)} aria-labelledby={dialog.titleId} aria-describedby={dialog.descriptionId} onCancel={event => { event.preventDefault(); dialog.onOpenChange(false); }} onClick={event => {
+  return <dialog {...props} ref={element} className={cn("native-dialog dialog-glass rounded-2xl border", className)} aria-labelledby={dialog.titleId} aria-describedby={dialog.descriptionId} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} onKeyDownCapture={event => {
+    if ((composing.current || event.nativeEvent.isComposing || event.keyCode === 229) && ["Enter", "Escape"].includes(event.key)) event.stopPropagation();
+  }} onSubmitCapture={event => { if (composing.current) { event.preventDefault(); event.stopPropagation(); } }} onCancel={event => { event.preventDefault(); if (!composing.current) dialog.onOpenChange(false); }} onClick={event => {
     if (event.target !== event.currentTarget) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.onOpenChange(false);
@@ -45,7 +49,7 @@ export function DialogFooter({ className, ...props }: ComponentProps<"div">) {
 }
 
 export function DialogTitle({ className, ...props }: ComponentProps<"h2">) {
-  return <h2 id={useDialog().titleId} className={cn("wrap-anywhere font-semibold text-xl leading-none pr-8", className)} {...props} />;
+  return <h2 id={useDialog().titleId} className={cn("wrap-anywhere font-semibold text-xl leading-snug pr-8", className)} {...props} />;
 }
 
 export function DialogDescription({ className, ...props }: ComponentProps<"p">) {

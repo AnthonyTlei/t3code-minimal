@@ -158,3 +158,65 @@ test('explicit worktree creates a separate project and local Git views keep auth
   const state = await harness.api('/api/bootstrap'); expect(state.projects).toHaveLength(2);
   expect(await fs.readFile(path.join(harness.roots[0], 'isolated-checkout', 'example.ts'), 'utf8')).toContain('"before"');
 });
+
+test('a delayed send preserves newer drafts in the sending chat and another selected chat', async ({ page, harness }) => {
+  const first = await harness.seed('Sending chat');
+  await harness.api('/api/chats', 'POST', { projectId: first.projectId, title: 'Other draft' });
+  await open(page, harness); await page.getByRole('button', { name: 'Sending chat', exact: true }).first().click();
+  let release!: () => void; let arrived!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const intercepted = new Promise<void>(resolve => { arrived = resolve; });
+  await page.route('**/api/chats/*/messages', async route => {
+    const response = await route.fetch(); arrived(); await gate; await route.fulfill({ response });
+  });
+  try {
+    await send(page, 'original submitted draft'); await intercepted;
+    await page.getByRole('textbox', { name: 'Message Codex' }).fill('newer draft in the sending chat');
+    await page.getByRole('button', { name: 'Other draft', exact: true }).first().click();
+    await page.getByRole('textbox', { name: 'Message Codex' }).fill('independent draft in the other chat');
+    release();
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
+    await expect(page.getByRole('textbox', { name: 'Message Codex' })).toHaveValue('independent draft in the other chat');
+    await page.getByRole('button', { name: 'Sending chat', exact: true }).first().click();
+    await expect(page.getByRole('textbox', { name: 'Message Codex' })).toHaveValue('newer draft in the sending chat');
+    await expect(assistant(page, 'Synthetic response: original submitted draft')).toBeVisible();
+    const state = await harness.api('/api/bootstrap');
+    expect(state.chats.flatMap((chat: any) => chat.messages).filter((message: any) => message.role === 'user').map((message: any) => message.text)).toEqual(['original submitted draft']);
+  } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
+});
+
+test('IME Enter and Escape keep composition local until an explicit committed action', async ({ page, harness }) => {
+  await open(page, harness);
+  await page.getByRole('button', { name: 'Add your first project' }).click();
+  const dialog = page.getByRole('dialog'); const name = dialog.getByLabel('Name', { exact: true });
+  await name.fill('Synthetic input'); await dialog.getByRole('checkbox').first().check(); await name.focus();
+  await name.dispatchEvent('compositionstart'); await name.press('Enter'); await name.press('Escape');
+  await expect(dialog).toBeVisible(); expect((await harness.api('/api/bootstrap')).projects).toHaveLength(0);
+  await name.dispatchEvent('compositionend'); await name.press('Enter'); await expect(dialog).not.toBeVisible();
+  await page.getByRole('button', { name: 'Start a chat', exact: true }).click();
+  await page.getByRole('button', { name: 'Create chat', exact: true }).click();
+  const composer = page.getByRole('textbox', { name: 'Message Codex' }); await composer.fill('synthetic composition');
+  await composer.dispatchEvent('compositionstart'); await composer.press('Enter');
+  await expect(composer).toHaveValue(/synthetic composition/);
+  expect((await harness.api('/api/bootstrap')).chats[0].messages).toHaveLength(0);
+  await composer.dispatchEvent('compositionend');
+  await composer.fill('synthetic composition');
+  for (const flags of [{ isComposing: true }, { keyCode: 229 }]) {
+    await composer.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true, ...flags });
+    expect((await harness.api('/api/bootstrap')).chats[0].messages).toHaveLength(0);
+  }
+  await composer.press('Enter'); await expect(assistant(page, 'Synthetic response: synthetic composition')).toBeVisible();
+  await expect(composer).toHaveValue('');
+  expect(harness.requests.filter(request => !request.url.startsWith(harness.app.url))).toEqual([]);
+});
+
+test('a native-resolved approval clears its controls while the turn stays cancellable', async ({ page, harness }) => {
+  await harness.seed('Native resolution'); await open(page, harness);
+  await page.getByRole('button', { name: 'Native resolution', exact: true }).first().click();
+  await send(page, 'resolved-approval'); await expect(page.getByRole('region', { name: 'Approval requested' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Approval requested' })).toHaveCount(0);
+  await expect(page.locator('.composer-footnote')).toContainText('Working');
+  await page.getByRole('button', { name: 'Stop response' }).click();
+  await expect(page.locator('.composer-footnote')).toContainText('Interrupted');
+  expect(harness.requests.filter(request => !request.url.startsWith(harness.app.url))).toEqual([]);
+});

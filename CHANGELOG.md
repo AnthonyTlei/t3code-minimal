@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2 — 2026-11-07
+
+- Selectively port relevant fixes reviewed through upstream `006d7e38f0485431c314a1afcc39fa823f379092`; retain the original extraction pin and removed-service boundaries.
+- Clear native-resolved approvals and questions, reject stale answers, and keep remaining requests and turn status consistent.
+- Bind native output and approvals to the acknowledged turn, with bounded early-event buffering and fail-closed handling of invalid or reused turn IDs.
+- Preserve newer and other-chat drafts when an asynchronous send completes.
+- Respect IME composition in the composer and dialogs; improve dialog-title line height.
+- Record the update process and selected/skipped changes in `docs/UPSTREAM-UPDATES.md`.
+
 ## 0.1.1 — 2026-10-29
 
 - Keep browser session capabilities out of OS opener process arguments in native and Docker workflows.

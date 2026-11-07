@@ -78,7 +78,7 @@ test('Unix HTTP health is minimal, reports host readiness and retains API author
   const get = (route, headers = {}) => new Promise((resolve, reject) => {
     http.get({ socketPath, path: route, headers: { Host: '127.0.0.1:3777', ...headers } }, response => { let data = ''; response.on('data', chunk => { data += chunk; }); response.on('end', () => resolve({ status: response.statusCode, value: JSON.parse(data) })); }).on('error', reject);
   });
-  assert.deepEqual((await get('/healthz')).value, { status: 'ok', ready: false, version: '0.1.1' });
+  assert.deepEqual((await get('/healthz')).value, { status: 'ok', ready: false, version: '0.1.2' });
   assert.equal((await get('/api/bootstrap')).status, 401); assert.equal((await get('/healthz', { Host: 'hostile.invalid' })).status, 403);
   const socket = await gateway(f.brokerPath); t.after(() => socket.destroy());
   assert.equal((await get('/healthz')).value.ready, true);

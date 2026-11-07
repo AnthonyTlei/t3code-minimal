@@ -77,11 +77,11 @@ docker run --rm --pull never --network none --read-only \
   --user "$(id -u):$(id -g)" \
   --mount "type=volume,src=${T3_BACKUP_PROJECT}_appdata,dst=/data,readonly" \
   --mount "type=bind,src=${T3_BACKUP_DIR},dst=/backup" \
-  --entrypoint sh t3code-local:0.1.1 \
+  --entrypoint sh t3code-local:0.1.2 \
   -c 'umask 077; test ! -e /backup/history.tar.gz && tar -czf /backup/history.tar.gz -C /data private'
 ```
 
-Use the actual staged image tag if it differs from `t3code-local:0.1.1`. The private host `.local-state/config.json` and generated Compose configuration need their own backup. Runtime control sockets, PID/nonce records and cached launch capabilities are temporary, not restore inputs. Restoring or migrating ownership is an explicit stopped-service operation; it is not performed automatically by startup.
+Use the actual staged image tag if it differs from `t3code-local:0.1.2`. The private host `.local-state/config.json` and generated Compose configuration need their own backup. Runtime control sockets, PID/nonce records and cached launch capabilities are temporary, not restore inputs. Restoring or migrating ownership is an explicit stopped-service operation; it is not performed automatically by startup.
 
 If legacy bind-mounted history exists in `.local-state/data/state.json`, configuration stops and asks for an explicit migration. Preserve and back up that data; do not remove it merely to suppress the guard. Moving native history into Docker likewise requires an explicit reviewed transfer.
 

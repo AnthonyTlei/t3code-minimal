@@ -82,7 +82,7 @@ test('independent health review exposes no credentials or workspace information 
     }).on('error', reject);
   });
   const health = await request('/healthz'); assert.equal(health.status, 200);
-  assert.deepEqual(JSON.parse(health.data), { status: 'ok', ready: true, version: '0.1.1' });
+  assert.deepEqual(JSON.parse(health.data), { status: 'ok', ready: true, version: '0.1.2' });
   assert.equal(health.data.includes(app.token), false); assert.equal(health.data.includes(workspace), false); assert.equal(launches, 0);
   assert.equal((await request('/api/bootstrap')).status, 401);
   assert.equal((await request('/healthz', { Origin: 'https://hostile.invalid' })).status, 403);

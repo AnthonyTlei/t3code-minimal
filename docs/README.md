@@ -11,6 +11,7 @@
 - [Development](DEVELOPMENT.md): repository structure, focused checks, synthetic test adapters and release packaging.
 - [Contributing](../CONTRIBUTING.md): small changes and verification expectations.
 - [Maintenance](MAINTENANCE.md): reviewing upstream updates without reintroducing removed services.
+- [Upstream updates](UPSTREAM-UPDATES.md): selected ports, exclusions and the repeatable review workflow.
 - [Removed implementation inventory](REMOVALS.md): what was removed and what replaces it.
 
 ## Security and evidence

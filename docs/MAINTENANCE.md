@@ -2,6 +2,8 @@
 
 Keep the pinned baseline and retained-code provenance/required notices. This fork is a small extraction, not a feature-flag profile of the upstream monorepo. Review upstream changes selectively; do not merge the original provider/cloud/bootstrap/runtime wholesale.
 
+The original extraction pin stays in `docs/feasibility/UPSTREAM.json`. Its `lastReview` records the separately reviewed upstream snapshot; it does not mean all intervening features were imported. [Upstream updates](UPSTREAM-UPDATES.md) lists the actual ports, exclusions and reproducible comparison commands.
+
 1. Re-pin reviewed source and exact build dependencies. Regenerate the lockfile deliberately, review the dependency closure and bundled notices, and retain zero runtime npm dependencies unless a concrete reviewed need justifies otherwise.
 2. Reject new external clients, accounts, telemetry/exporters, remote assets/themes/fonts, registry/update/install paths, relays, arbitrary RPC proxies and auxiliary model calls. Trace cold start, idle, errors and fallbacks; a disabled setting or unused UI is not removal.
 3. Keep Codex launch arguments/environment/config and enterprise policy ownership unchanged. Validate the exact approved protocol schema and only expose permitted capabilities. Unknown/native permission/auth requests must fail closed; do not add full-access or session policy amendment shortcuts.

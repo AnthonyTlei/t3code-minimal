@@ -134,6 +134,19 @@ try {
   mark('wrapper-cancel');
   assert.equal((await request(app, `/api/chats/${one.id}/messages`, 'POST', { text: 'hold' })).status, 202);
   const cancelled = waitChat(app, one.id, chat => chat.status === 'interrupted'); await request(app, `/api/chats/${one.id}/cancel`, 'POST', {}); await cancelled;
+  mark('wrapper-early-and-stale-turn-events');
+  await run(one.id, 'fast-turn', chat => chat.status === 'idle' && chat.messages.some(message => message.text === 'Synthetic fast response'));
+  await run(one.id, 'early-stale', chat => chat.status === 'idle' && chat.messages.some(message => message.text === 'Synthetic response: hello'));
+  const scoped = (await request(app, '/api/bootstrap')).value.chats.find(chat => chat.id === one.id);
+  assert.doesNotMatch(JSON.stringify(scoped), /STALE_NATIVE_OUTPUT|stale command/);
+  const early = await run(one.id, 'early-approval', chat => chat.status === 'awaiting_approval');
+  const earlyDone = waitChat(app, one.id, chat => chat.status === 'idle' && chat.messages.some(message => message.text === 'Approval decision: decline'));
+  assert.equal((await request(app, `/api/chats/${one.id}/responses`, 'POST', { requestId: early.pendingRequests[0].id, result: { decision: 'decline' } })).status, 200); await earlyDone;
+  mark('wrapper-native-request-resolution');
+  const resolving = await run(one.id, 'resolved-approval', chat => chat.status === 'awaiting_approval');
+  await waitChat(app, one.id, chat => chat.status === 'running' && chat.pendingRequests.length === 0);
+  assert.equal((await request(app, `/api/chats/${one.id}/responses`, 'POST', { requestId: resolving.pendingRequests[0].id, result: { decision: 'accept' } })).status, 409);
+  const resolvedCancelled = waitChat(app, one.id, chat => chat.status === 'interrupted'); await request(app, `/api/chats/${one.id}/cancel`, 'POST', {}); await resolvedCancelled;
   mark('wrapper-native-error');
   const failed = waitChat(app, two.id, chat => chat.status === 'interrupted'); await request(app, `/api/chats/${two.id}/messages`, 'POST', { text: 'crash' }); await failed;
   mark('wrapper-malformed-settings');
@@ -169,7 +182,7 @@ try {
   }
   for (const capability of transientCapabilities) assert.equal(JSON.stringify(browserAudit).includes(capability), false, 'Browser evidence retained a session capability');
   mark('finished');
-  await fs.writeFile(path.join(output, 'exercise.json'), JSON.stringify({ result: 'pass', capabilityLeakCheck: { status: 'pass', checkedCapabilityCount: transientCapabilities.size }, processes, phases, sourceHashes: auditedSources, browserAudit, positiveControls: { ...positive, httpPaths, dnsQueries }, appScenarios: ['cold start', '20000 ms idle and SSE heartbeat', 'stream', 'concurrent chats', 'approval', 'question', 'cancel', 'native error', 'malformed settings', 'removed route', 'shutdown', 'restart/resume', 'native helper absence', 'malformed persisted state'], limits: ['synthetic fake CLI only', browserAudit.status === 'pass' ? 'sandboxed browser tested with bounded idle and hostile markup' : 'sandboxed browser could not launch; see browserAudit diagnostics', 'not a deployment-host verification', 'network-none test namespace, not a production deployment topology'] }, null, 2) + '\n');
+  await fs.writeFile(path.join(output, 'exercise.json'), JSON.stringify({ result: 'pass', capabilityLeakCheck: { status: 'pass', checkedCapabilityCount: transientCapabilities.size }, processes, phases, sourceHashes: auditedSources, browserAudit, positiveControls: { ...positive, httpPaths, dnsQueries }, appScenarios: ['cold start', '20000 ms idle and SSE heartbeat', 'stream', 'concurrent chats', 'approval', 'question', 'cancel', 'completion before acknowledgement', 'stale turn output/approval rejection', 'early approval', 'native request resolution and stale answer rejection', 'native error', 'malformed settings', 'removed route', 'shutdown', 'restart/resume', 'native helper absence', 'malformed persisted state'], limits: ['synthetic fake CLI only', browserAudit.status === 'pass' ? 'sandboxed browser tested with bounded idle and hostile markup' : 'sandboxed browser could not launch; see browserAudit diagnostics', 'not a deployment-host verification', 'network-none test namespace, not a production deployment topology'] }, null, 2) + '\n');
   console.log('Runtime exercise passed; token-free evidence written.');
 } finally {
   clearTimeout(watchdog); backend?.kill('SIGTERM'); probe?.kill('SIGTERM');

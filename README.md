@@ -14,6 +14,8 @@ A small local web UI for your existing Codex CLI. Projects, conversations and co
 
 The wrapper has no account, telemetry, update service, cloud sync, relay or background AI helpers. It never installs Codex or changes its authentication, endpoints, sandbox, approvals, skills or MCP configuration.
 
+Upstream improvements are reviewed and ported selectively. Removed services stay absent; this is not an upstream installation with disabled settings. See the [update record and maintenance workflow](docs/UPSTREAM-UPDATES.md).
+
 ## Quick start
 
 You need an already configured approved Codex CLI, Python 3.8+, Make, and access to a **local** Docker daemon with Docker Compose. Image builds download pinned build dependencies; application startup performs no installer or provider download.
