@@ -10,6 +10,7 @@ import hmac
 import hashlib
 import html
 import http.client
+import io
 import json
 import os
 from pathlib import Path
@@ -22,6 +23,7 @@ import socketserver
 import stat
 import subprocess
 import sys
+import tarfile
 import threading
 import time
 from urllib.parse import urlparse
@@ -201,6 +203,8 @@ def command(config, *arguments, docker_endpoint=None, docker_client=None):
 
 def compose_env(config, docker_endpoint=None):
     result = dict(os.environ)
+    result.pop("BUILDKIT_HOST", None)
+    result.update(BUILDX_BUILDER="default", DOCKER_BUILDKIT="1")
     result.update(LOCAL_UID=str(config["uid"]), LOCAL_GID=str(config["gid"]), T3_PORT=str(config["port"]))
     if docker_endpoint:
         result.pop("DOCKER_CONTEXT", None)
@@ -234,6 +238,89 @@ def compose_run(config, *arguments, capture=False, timeout=None):
                               text=True, timeout=timeout)
     except subprocess.CalledProcessError:
         raise UserError("Docker Compose failed; inspect the local Docker/Compose status") from None
+
+
+def prebuilt_context():
+    """Manifest-verified public files; no filesystem metadata cache is reused."""
+    def read_public(relative, limit):
+        directory = os.open(str(PROJECT), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            for component in relative.parts[:-1]:
+                child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+                os.close(directory)
+                directory = child
+            descriptor = os.open(relative.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+            with os.fdopen(descriptor, "rb") as handle:
+                info = os.fstat(handle.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+                    raise UserError("Prebuilt input is unsafe or exceeds its size limit")
+                data = handle.read(limit + 1)
+                if len(data) > limit:
+                    raise UserError("Prebuilt input exceeds its size limit")
+                return data, info.st_mode
+        finally:
+            os.close(directory)
+
+    raw, _ = read_public(Path("MANIFEST.json"), 128 * 1024)
+    try:
+        manifest = json.loads(raw)
+    except (ValueError, UnicodeError):
+        raise UserError("The prebuilt release manifest is invalid") from None
+    if not isinstance(manifest, dict) or manifest.get("format") != "t3code-local-release" or not isinstance(manifest.get("files"), list) or not 1 <= len(manifest["files"]) <= 4096:
+        raise UserError("A valid prebuilt release manifest is required")
+    required = {"Dockerfile", ".dockerignore", "LICENSE", "NOTICE", "minimal/web/UPSTREAM.md", "minimal/server/main.mjs", "dist/index.html"}
+    selected = {}
+    seen = set()
+    for entry in manifest["files"]:
+        if not isinstance(entry, dict) or set(entry) != {"path", "sha256"}:
+            raise UserError("Invalid prebuilt manifest entry")
+        name, digest = entry["path"], entry["sha256"]
+        if not isinstance(name, str) or not name or "\\" in name or "\0" in name or Path(name).is_absolute() or any(part in ("", ".", "..") for part in name.split("/")) or name in seen or not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+            raise UserError("Invalid prebuilt manifest path or digest")
+        seen.add(name)
+        if name in required or name.startswith(("minimal/server/", "dist/")):
+            if re.search(r"(?:^|/)(?:\.env[^/]*|\.git|\.local-state|node_modules|connection\.json|launch\.html|state\.json|auth\.json)(?:/|$)|fake-codex|\.(?:pem|key|p12|pfx)$|(?:^|/)[^/]*\.(?:test|spec)\.", name):
+                raise UserError("Private or test content cannot enter a prebuilt build context")
+            selected[name] = digest
+    if not required.issubset(selected):
+        raise UserError("The prebuilt release is missing required public inputs")
+    output = io.BytesIO()
+    remaining = 32 * 1024 * 1024
+    with tarfile.open(fileobj=output, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+        for name, digest in sorted(selected.items()):
+            data, mode = read_public(Path(name), max(0, remaining))
+            if hashlib.sha256(data).hexdigest() != digest:
+                raise UserError("Prebuilt inputs do not match the release manifest")
+            remaining -= len(data) + 1024
+            if remaining < 0:
+                raise UserError("Prebuilt context exceeds the 32 MiB build limit")
+            entry = tarfile.TarInfo(name)
+            entry.size = len(data)
+            entry.mode = 0o755 if mode & 0o111 else 0o644
+            entry.uid = entry.gid = entry.mtime = 0
+            entry.uname = entry.gname = "root"
+            archive.addfile(entry, io.BytesIO(data))
+    context = output.getvalue()
+    if len(context) > 32 * 1024 * 1024:
+        raise UserError("Prebuilt context exceeds the 32 MiB build limit")
+    return context
+
+
+def build_image(config):
+    if compose_env(config).get("T3_BUILD_TARGET") != "prebuilt":
+        return compose_run(config, "build", "app")
+    # Resolve the existing Compose image tag, without changing CLI/auth config.
+    value = json.loads(compose_run(config, "config", "--format", "json", capture=True).stdout)
+    image = value.get("services", {}).get("app", {}).get("image")
+    if not isinstance(image, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/@-]{0,255}", image):
+        raise UserError("The prebuilt image tag is invalid")
+    context = prebuilt_context()
+    docker, endpoint = docker_local(include_endpoint=True)
+    try:
+        subprocess.run([docker, "--host", endpoint, "build", "--builder", "default", "--file", "Dockerfile", "--target", "prebuilt", "--tag", image, "-"],
+                       input=context, env=compose_env(config, endpoint), cwd=str(PROJECT), check=True)
+    except subprocess.CalledProcessError:
+        raise UserError("The prebuilt image build failed; no application was started") from None
 
 
 def probe_health(port):
@@ -776,6 +863,9 @@ def start(config, build=True):
             print("Already running and healthy.")
             return
         raise UserError("A manager is already running but not healthy; inspect status/logs before restarting")
+    if build and compose_env(config).get("T3_BUILD_TARGET") == "prebuilt":
+        build_image(config)
+        build = False
     compose_run(config, "up", "-d", "--build" if build else "--no-build", "--pull", "never", "--wait", "--wait-timeout", "90")
     log = STATE / "run" / "bridge.log"
     checked(log, optional=True)
@@ -823,7 +913,7 @@ def operate(args, config):
     elif args.operation == "up":
         start(config, not args.no_build)
     elif args.operation == "build":
-        compose_run(config, "build", "app")
+        build_image(config)
     elif args.operation == "down":
         stop_manager()
         compose_run(config, "down")

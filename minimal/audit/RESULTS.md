@@ -12,7 +12,7 @@ Four separately attributed negative controls were captured at syscall level and 
 
 The browser-global verification **did not pass**: sandbox-enabled Chromium 156 was attempted and its launch tree was traced, but it exited before creating a page. `trace.55:45` records `clone(... CLONE_NEWUSER|SIGCHLD) = -1 EPERM`; Chromium reported “No usable sandbox.” No --no-sandbox flag, security-profile relaxation, host-network mode, privilege escalation or added capability was used. Its absence of connection attempts during failed launch is not evidence about browser-global behavior when a page is running. The local Playwright page tests are separate evidence.
 
-The audit image was `sha256:b1fab4f756bc4a17086d75b5fcb73dd8e5d282fc4cab6a13f4fb65df5626e89e`, Linux ARM64, based on pinned Node 24.18.0 Debian 12. Tools: `strace=6.1-0.1`, `chromium=156.0.8078.47-1~deb12u1`. It ran as a non-root identity with all capabilities dropped, no-new-privileges, read-only root filesystem and network-none. Build-time package downloads are distinct from app-runtime traffic.
+The audit image was `sha256:3a3f6fc810ff48865565448935457005b5da14b06681db629d68c75c27a4d0fd`, Linux ARM64, based on pinned Node 24.18.0 Debian 12. Tools: `strace=6.1-0.1`, `chromium=156.0.8078.47-1~deb12u1`. It ran as a non-root identity with all capabilities dropped, no-new-privileges, read-only root filesystem and network-none. Build-time package downloads are distinct from app-runtime traffic.
 
 Raw send/receive arguments were opaque pointers to avoid recording authentication payloads. Both generated session capabilities were checked for exact absence from retained artifacts; the report stores only the pass result and count. General auth/launch-URL markers are also rejected by the summarizer.
 

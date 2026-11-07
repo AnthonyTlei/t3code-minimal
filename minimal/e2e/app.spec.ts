@@ -220,3 +220,24 @@ test('a native-resolved approval clears its controls while the turn stays cancel
   await expect(page.locator('.composer-footnote')).toContainText('Interrupted');
   expect(harness.requests.filter(request => !request.url.startsWith(harness.app.url))).toEqual([]);
 });
+
+test('a delayed bootstrap response cannot erase a newer native approval received over SSE', async ({ page, harness }) => {
+  await harness.seed('Snapshot ordering'); await open(page, harness);
+  await page.getByRole('button', { name: 'Snapshot ordering', exact: true }).first().click();
+  let release!: () => void; let captured!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const capturedSnapshot = new Promise<void>(resolve => { captured = resolve; });
+  await page.route('**/api/bootstrap', async route => {
+    const response = await route.fetch();
+    expect((await response.json()).chats[0].pendingRequests).toHaveLength(0);
+    captured(); await gate; await route.fulfill({ response });
+  });
+  try {
+    await send(page, 'delayed-approval'); await capturedSnapshot;
+    await expect(page.getByRole('region', { name: 'Approval requested' })).toBeVisible();
+    release();
+    await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Approve once', exact: true }).click();
+    await expect(assistant(page, 'Approval decision: accept')).toBeVisible();
+  } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
+});

@@ -12,7 +12,7 @@
     "additionalPtraceCapability": false
   },
   "image": {
-    "id": "sha256:b1fab4f756bc4a17086d75b5fcb73dd8e5d282fc4cab6a13f4fb65df5626e89e",
+    "id": "sha256:3a3f6fc810ff48865565448935457005b5da14b06681db629d68c75c27a4d0fd",
     "os": "linux",
     "arch": "arm64"
   },
@@ -124,9 +124,9 @@
   ],
   "sourceHashes": {
     "dist/THIRD-PARTY-NOTICES.txt": "41f5d597dddad6b237540d6bfe4980e3e766c61098032f5bcfaa54385e55333b",
-    "dist/assets/index-BsRM5Q9Y.js": "93d86c48d7bbcd1f488f74562da72c0ed6ce6259cb22cb38f1acbe5d431b32ac",
     "dist/assets/index-DSkkmc-v.css": "05784d78dbb1a7614a7048c62e9eaa908796e376e015357efe6ccee4e3d8383e",
-    "dist/index.html": "dca83e5426c3e5d18080a1719e953ba0ec30b22c010addb3c3ca2b9e2946ebf1",
+    "dist/assets/index-DesTI8jN.js": "b5bd0697d90f646b69c3ca466ba1f7da02baef3218d263488972fb0ed2f310e4",
+    "dist/index.html": "52731c4cdd7d5a8492b0b7c947937e8e9030d08b38ed3d127cd7abc695a3da71",
     "minimal/server/bridge-client.mjs": "60f6a0aee0545eabd1b5f377738bd772c789a7f122ba8e858667f612b6960b10",
     "minimal/server/bridge.mjs": "9d7418b50ddf7e81e7e903c8d1d548b936b1b4a4aa6c05c2c92996b0e8e1c70b",
     "minimal/server/codex.mjs": "bdb0b14d8197e9b3e797f17b44b5b129f30010732857fe5b4d8a9f93a110831e",
@@ -138,7 +138,7 @@
     "minimal/server/server.mjs": "46178b15d1895da620b95895191b6213a3474f91c5ebfed338243960191624f2",
     "minimal/server/store.mjs": "91e5e13a8c5b26c5b6126f0492a30daa288d6f4a92065cb6bd7fd7f67300044c",
     "minimal/server/workspace.mjs": "e0687c290ea05251a2076f02b8d99bb899c3f8761d03740cf2650e0cbf8025a4",
-    "minimal/test/fake-codex.mjs": "0e4c67fa47716fe2f2b8485b17a57cd503ee96c627426ed5c898ffa7092972eb"
+    "minimal/test/fake-codex.mjs": "61035c0459ea86582992253233022fe729748cc3c5e84977152a2a999f4b7185"
   },
   "capabilityLeakCheck": {
     "status": "pass",
@@ -149,7 +149,7 @@
     "code": "SANDBOXED_BROWSER_LAUNCH_FAILED",
     "reason": "Chromium sandbox could not create a user namespace: clone(CLONE_NEWUSER|SIGCHLD) = -1 EPERM; security profile was not relaxed."
   },
-  "rawEvidenceDirectory": "minimal/audit/output/20261107T045745Z",
+  "rawEvidenceDirectory": "minimal/audit/output/20261107T050234Z",
   "verifiedDate": "2026-11-07",
-  "summarySha256": "d782242f2989c58aa7776e22b6ba762a2851ad904fa9aba70b965f7fbd744eb1"
+  "summarySha256": "48ff5165cbaa56b8ec7232b908cf1541f367803c622ccd22ab9c5e173c2b3384"
 }

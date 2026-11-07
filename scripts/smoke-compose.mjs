@@ -20,6 +20,9 @@ const workspace = path.join(base, 'workspace');
 const report = { result: 'incomplete', platform: `${os.platform()}/${os.arch()}`, checks: [], model: 'deterministic host fake CLI', secretsRetained: false };
 const env = { ...process.env, T3_MINIMAL_SYNTHETIC_MARKER: 'compose-host-inheritance' };
 let started = false; let browser; let syntheticVolume = temporaryProjectName + '_appdata'; const secrets = [];
+const browserErrors = [];
+const browserRequests = [];
+const resourcePath = value => { const url = new URL(value); return url.protocol === 'about:' ? 'about:blank' : `${url.protocol}//${url.host}${url.pathname}`; };
 const sanitized = value => secrets.reduce((text, secret) => text.replaceAll(secret, '[redacted]'), String(value));
 const run = async (command, args, cwd = project) => execute(command, args, { cwd, env, timeout: 180_000, maxBuffer: 4 * 1024 * 1024 });
 const manage = (...args) => run('python3', ['scripts/manage.py', ...args]);
@@ -95,9 +98,19 @@ try {
   const privateProject = await api('/api/projects', 'POST', { name: 'Packaging root', roots: [project] });
   const privateRead = await fetch(url + `/api/file?projectId=${privateProject.id}&path=${encodeURIComponent(path.join(project, '.local-state/run/manager.json'))}`, { headers: { Authorization: `Bearer ${token}` } });
   assert.ok([403, 404].includes(privateRead.status)); check('workspace overlap cannot expose masked private control state');
+  const manifest = JSON.parse(await fs.readFile(path.join(project, 'MANIFEST.json'), 'utf8'));
+  const runtimeFiles = manifest.files.filter(file => file.path.startsWith('minimal/server/') || file.path.startsWith('dist/'));
+  const { stdout: assetIds } = await run('docker', ['ps', '--filter', `label=com.docker.compose.project=${temporaryProjectName}`, '--format', '{{.ID}}']);
+  const assetContainerId = assetIds.trim(); assert.ok(assetContainerId);
+  const inspectAssets = 'const f=require("node:fs"),c=require("node:crypto");console.log(JSON.stringify(JSON.parse(process.argv[1]).map(p=>({path:p,sha256:c.createHash("sha256").update(f.readFileSync(p)).digest("hex")}))))';
+  const { stdout: assetHashes } = await run('docker', ['exec', assetContainerId, 'node', '-e', inspectAssets, JSON.stringify(runtimeFiles.map(file => file.path))]);
+  assert.deepEqual(JSON.parse(assetHashes), runtimeFiles, 'Running container bytes must match the extracted release manifest');
+  check('running container server and frontend hashes match the extracted release manifest, including equal-size normalized-timestamp inputs');
   browser = await chromium.launch({ headless: true, args: ['--disable-background-networking', '--disable-component-update', '--disable-sync', '--no-first-run'] });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); const requests = []; const errors = [];
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); const requests = []; const errors = browserErrors;
   page.on('request', request => requests.push(request.url())); page.on('pageerror', error => errors.push(error.message));
+  page.on('response', response => browserRequests.push({ path: resourcePath(response.url()), status: response.status() }));
+  page.on('requestfailed', request => browserRequests.push({ path: resourcePath(request.url()), failure: request.failure()?.errorText }));
   await page.goto(launchUri); await page.getByText('Connected locally', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Docker browser', exact: true }).first().click();
   async function send(text) { await page.getByRole('textbox', { name: 'Message Codex' }).fill(text); await page.getByRole('button', { name: 'Send message', exact: true }).click(); }
@@ -162,6 +175,10 @@ try {
   console.log(`Compose release smoke passed: ${report.checks.length} checks; browser, host fake CLI, restart/resume, private state and no-network container verified.`);
 } catch (error) {
   report.result = 'fail'; report.error = error.message;
+  try {
+    const page = browser?.contexts()[0]?.pages()[0];
+    if (page) report.browserFailure = { path: resourcePath(page.url()), errors: browserErrors, requests: browserRequests, body: (await page.locator('body').innerText()).slice(0, 20_000) };
+  } catch { /* Synthetic diagnostics are best effort; tokens are redacted below. */ }
   try {
     const { createHash } = await import('node:crypto'); const name = 't3local-' + createHash('sha256').update(project).digest('hex').slice(0, 12);
     const { stdout } = await run('docker', ['ps', '--filter', `label=com.docker.compose.project=${name}`, '--format', '{{.ID}}']);

@@ -7,6 +7,7 @@ Choose Docker/Compose for the packaged workflow or native Node for a direct loca
 ### Requirements
 
 - A local Docker daemon you already have permission to use, and the `docker compose` plugin with `up --wait` support.
+- For image builds, BuildKit and the daemon's local default builder. A staged-image `NO_BUILD=1` start does not run a build.
 - Python 3.8 or later and Make on the host.
 - The existing approved Codex CLI on the host, selected by its absolute executable path.
 - An existing readable workspace and a permitted private local state location.

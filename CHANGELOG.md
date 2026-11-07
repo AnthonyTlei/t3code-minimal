@@ -6,6 +6,8 @@
 - Clear native-resolved approvals and questions, reject stale answers, and keep remaining requests and turn status consistent.
 - Bind native output and approvals to the acknowledged turn, with bounded early-event buffering and fail-closed handling of invalid or reused turn IDs.
 - Preserve newer and other-chat drafts when an asynchronous send completes.
+- Keep newer SSE updates when an older bootstrap response arrives, preserving active approval controls.
+- Build prebuilt releases from manifest-verified tar contexts and verify running container hashes, avoiding mixed cached HTML/assets after normalized-timestamp rebuilds.
 - Respect IME composition in the composer and dialogs; improve dialog-title line height.
 - Record the update process and selected/skipped changes in `docs/UPSTREAM-UPDATES.md`.
 

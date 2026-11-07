@@ -59,14 +59,16 @@ export function App() {
   const timeline = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const composerComposing = useRef(false);
+  const snapshotRevision = useRef(0);
   const chat = snapshot.chats.find(item => item.id === selectedChatId);
   const project = snapshot.projects.find(item => item.id === (chat?.projectId || selectedProjectId)) || snapshot.projects[0];
   const root = chat?.workspaceRoot || project?.roots[0] || "";
   const dialogProject = snapshot.projects.find(item => item.id === selectedProjectId) || project;
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
+    const revision = snapshotRevision.current;
     const value = await request<Snapshot>(token, "/api/bootstrap", "GET", undefined, signal);
-    if (!signal?.aborted) setSnapshot({ ...empty, ...value });
+    if (!signal?.aborted && snapshotRevision.current === revision) setSnapshot({ ...empty, ...value });
     return value;
   }, [token]);
 
@@ -88,8 +90,8 @@ export function App() {
         setConnection("connected"); setError("");
         await events(token, controller.signal, event => {
           const value = event as Partial<Snapshot> & { type?: string; snapshot?: Snapshot; chat?: Chat };
-          if (value.type === "snapshot") setSnapshot({ ...empty, ...(value.snapshot || value as Snapshot) });
-          else if (value.type === "chat" && value.chat) setSnapshot(current => ({ ...current, chats: current.chats.some(chat => chat.id === value.chat!.id) ? current.chats.map(chat => chat.id === value.chat!.id ? value.chat! : chat) : [...current.chats, value.chat!] }));
+          if (value.type === "snapshot") { snapshotRevision.current++; setSnapshot({ ...empty, ...(value.snapshot || value as Snapshot) }); }
+          else if (value.type === "chat" && value.chat) { snapshotRevision.current++; setSnapshot(current => ({ ...current, chats: current.chats.some(chat => chat.id === value.chat!.id) ? current.chats.map(chat => chat.id === value.chat!.id ? value.chat! : chat) : [...current.chats, value.chat!] })); }
         });
       } catch (reason) {
         if (controller.signal.aborted) return;

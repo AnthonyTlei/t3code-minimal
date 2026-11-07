@@ -2,6 +2,7 @@ import argparse
 import base64
 import contextlib
 import importlib.util
+import hashlib
 import io
 import json
 import os
@@ -12,6 +13,7 @@ import socket
 import stat
 import sys
 import tempfile
+import tarfile
 import threading
 import unittest
 from unittest import mock
@@ -346,9 +348,92 @@ for line in sys.stdin:
     def test_offline_start_never_pulls_or_implicitly_builds_an_image(self):
         process = mock.Mock()
         process.poll.return_value = None
-        with mock.patch.object(manage, "manager_status", side_effect=[None, {"ready": True}]), mock.patch.object(manage, "probe_health", return_value=True), mock.patch.object(manage, "compose_run") as execute, mock.patch.object(manage, "cache_connection"), mock.patch.object(manage.subprocess, "Popen", return_value=process), contextlib.redirect_stdout(io.StringIO()):
+        with mock.patch.object(manage, "manager_status", side_effect=[None, {"ready": True}]), mock.patch.object(manage, "probe_health", return_value=True), mock.patch.object(manage, "compose_run") as execute, mock.patch.object(manage, "build_image") as build, mock.patch.object(manage, "cache_connection"), mock.patch.object(manage.subprocess, "Popen", return_value=process), contextlib.redirect_stdout(io.StringIO()):
             manage.start(self.config(), build=False)
         self.assertEqual(execute.call_args.args, (self.config(), "up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "90"))
+        build.assert_not_called()
+
+    def prebuilt_files(self):
+        self.prebuilt_names = ["Dockerfile", ".dockerignore", "LICENSE", "NOTICE", "minimal/server/main.mjs", "minimal/web/UPSTREAM.md", "dist/index.html", "dist/assets/current.js"]
+        for name in self.prebuilt_names:
+            file = self.project / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text("synthetic public input")
+        self.prebuilt_manifest()
+
+    def prebuilt_manifest(self):
+        files = [{"path": name, "sha256": hashlib.sha256((self.project / name).read_bytes()).hexdigest()} for name in self.prebuilt_names]
+        (self.project / "MANIFEST.json").write_text(json.dumps({"format": "t3code-local-release", "files": files}))
+
+    def test_prebuilt_tar_uses_current_bytes_despite_equal_size_and_normalized_mtime(self):
+        self.prebuilt_files()
+        index = self.project / "dist/index.html"
+        index.write_text("old-asset.js"); os.utime(index, (0, 0))
+        self.prebuilt_manifest()
+        first = manage.prebuilt_context()
+        index.write_text("new-asset.js"); os.utime(index, (0, 0))
+        self.prebuilt_manifest()
+        second = manage.prebuilt_context()
+        self.assertNotEqual(first, second)
+        (self.project / "minimal/test").mkdir()
+        (self.project / "minimal/test/fake-codex.mjs").write_text("must not ship")
+        with tarfile.open(fileobj=io.BytesIO(second)) as archive:
+            self.assertEqual(archive.extractfile("dist/index.html").read(), b"new-asset.js")
+            self.assertFalse(any(".local-state" in name or "fake-codex" in name for name in archive.getnames()))
+            for entry in archive:
+                self.assertEqual((entry.uid, entry.gid, entry.mtime), (0, 0, 0))
+                self.assertNotIn(str(self.project), entry.name)
+        self.assertEqual(second, manage.prebuilt_context())
+        index.write_text("unexpected bytes")
+        with self.assertRaisesRegex(manage.UserError, "manifest"):
+            manage.prebuilt_context()
+
+    def test_prebuilt_tar_rejects_private_files_symlinks_and_oversized_inputs(self):
+        self.prebuilt_files()
+        forbidden = self.project / "dist/.env"
+        forbidden.write_text("must not enter build")
+        # Unmanifested files are never sent; listed private content fails closed.
+        self.assertNotIn(b"must not enter build", manage.prebuilt_context())
+        self.prebuilt_names.append("dist/.env"); self.prebuilt_manifest()
+        with self.assertRaises(manage.UserError):
+            manage.prebuilt_context()
+        forbidden.unlink()
+        self.prebuilt_names.remove("dist/.env")
+        outside = self.base / "unrelated"; outside.write_text("preserve")
+        link = self.project / "dist/linked.js"; link.symlink_to(outside)
+        self.prebuilt_names.append("dist/linked.js"); self.prebuilt_manifest()
+        with self.assertRaises((manage.UserError, OSError)):
+            manage.prebuilt_context()
+        link.unlink()
+        self.prebuilt_names.remove("dist/linked.js")
+        self.prebuilt_manifest()
+        assets = self.project / "dist/assets"
+        saved_assets = self.project / "dist/real-assets"
+        assets.rename(saved_assets); assets.symlink_to(saved_assets, target_is_directory=True)
+        with self.assertRaises(OSError):
+            manage.prebuilt_context()
+        assets.unlink(); saved_assets.rename(assets)
+        with (self.project / "dist/large.js").open("wb") as file:
+            file.truncate(32 * 1024 * 1024 + 1)
+        self.prebuilt_names.append("dist/large.js"); self.prebuilt_manifest()
+        with self.assertRaises(manage.UserError):
+            manage.prebuilt_context()
+        self.assertEqual(outside.read_text(), "preserve")
+
+    def test_prebuilt_build_sends_tar_to_pinned_local_daemon_without_touching_cli(self):
+        self.prebuilt_files()
+        value = argparse.Namespace(stdout=json.dumps({"services": {"app": {"image": "t3code-local:synthetic"}}}))
+        with mock.patch.dict(os.environ, {"BUILDX_BUILDER": "unapproved-remote", "BUILDKIT_HOST": "tcp://unapproved.invalid:1234"}), mock.patch.object(manage, "compose_run", return_value=value), mock.patch.object(manage, "docker_local", return_value=("/trusted/docker", "unix:///approved.sock")), mock.patch.object(manage.subprocess, "run") as execute:
+            manage.build_image(self.config())
+            self.assertEqual(os.environ["BUILDX_BUILDER"], "unapproved-remote")
+            self.assertEqual(os.environ["BUILDKIT_HOST"], "tcp://unapproved.invalid:1234")
+        self.assertEqual(execute.call_args.args[0], ["/trusted/docker", "--host", "unix:///approved.sock", "build", "--builder", "default", "--file", "Dockerfile", "--target", "prebuilt", "--tag", "t3code-local:synthetic", "-"])
+        self.assertEqual(execute.call_args.kwargs["env"]["DOCKER_HOST"], "unix:///approved.sock")
+        self.assertNotIn("DOCKER_CONTEXT", execute.call_args.kwargs["env"])
+        self.assertEqual(execute.call_args.kwargs["env"]["BUILDX_BUILDER"], "default")
+        self.assertEqual(execute.call_args.kwargs["env"]["DOCKER_BUILDKIT"], "1")
+        self.assertNotIn("BUILDKIT_HOST", execute.call_args.kwargs["env"])
+        self.assertEqual(execute.call_args.kwargs["input"], manage.prebuilt_context())
 
 
 if __name__ == "__main__":

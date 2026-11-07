@@ -39,6 +39,9 @@ function ask(method, turnId, params, onResponse) {
 function runTurn(turnId, prompt) {
   notify('turn/started', { threadId, turn: { id: turnId, status: 'inProgress', items: [] } });
   if (prompt === 'hold') { heldTurn = turnId; return; }
+  if (prompt === 'delayed-approval') {
+    setTimeout(() => runTurn(turnId, 'approval'), 500); return;
+  }
   if (prompt === 'resolved-approval') {
     heldTurn = turnId;
     const requestId = serverRequestId;
